@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Material Cloud</title>
+
+<style>
+body{margin:0;font-family:"Segoe UI";background:#f4f8ff;}
+header{display:flex;justify-content:space-between;padding:15px;background:#4facfe;color:#fff;}
+.center{display:flex;justify-content:center;align-items:center;height:100vh;flex-direction:column;}
+input,button{padding:10px;margin:5px;border-radius:10px;border:1px solid #ccc;}
+button{background:#4facfe;color:#fff;border:none;cursor:pointer;}
+.hidden{display:none;}
+.container{padding:20px;}
+.folder{display:inline-block;padding:20px;margin:10px;background:#fff;border-radius:12px;cursor:pointer;}
+.file{padding:10px;margin:5px;background:#fff;border-radius:10px;cursor:pointer;}
+.preview{margin-top:10px;border:1px solid #ccc;padding:10px;}
+.chatBox{position:fixed;bottom:0;right:10px;width:300px;background:#fff;border-radius:10px;}
+.chatMessages{height:200px;overflow:auto;padding:10px;}
+.msg{padding:8px;margin:5px;border-radius:10px;}
+.me{background:#4facfe;color:#fff;text-align:right;}
+.other{background:#ddd;}
+</style>
+</head>
+
+<body>
+
+<header>
+<div>☁️ Material Cloud</div>
+<div onclick="openSettings()">⚙️</div>
+</header>
+
+<div id="login" class="center">
+<h2>Login</h2>
+<input id="username" placeholder="Username">
+<input id="password" type="password" placeholder="Password">
+<button onclick="loginUser()">Login</button>
+<button onclick="signupUser()">Create Account</button>
+</div>
+
+<div id="main" class="container hidden">
+<h2>Folders</h2>
+<div id="folders"></div>
+<div id="files"></div>
+<div id="preview" class="preview"></div>
+</div>
+
+<div id="settings" class="hidden">
+<p id="userInfo"></p>
+<button onclick="logout()">Logout</button>
+</div>
+
+<div id="chat" class="chatBox hidden">
+<div id="chatMessages" class="chatMessages"></div>
+<input id="chatText" placeholder="Message">
+<button onclick="sendMsg()">Send</button>
+</div>
+
+<script>
+let currentUser = null;
+let currentFolder = "";
+let pressTimer;
+
+const folders = ["English","Tamil","Maths","Science","AI","Social Science","Planner"];
+
+// STORAGE HELPERS
+function getData(key){ return JSON.parse(localStorage.getItem(key) || "[]"); }
+function setData(key,data){ localStorage.setItem(key,JSON.stringify(data)); }
+
+// SIGNUP
+function signupUser(){
+ let u = username.value.trim();
+ let p = password.value.trim();
+ if(!u || !p) return alert("Enter details");
+
+ let users = getData("users");
+ if(users.find(x=>x.u===u)) return alert("User exists");
+
+ users.push({u,p});
+ setData("users",users);
+ alert("Account created");
+}
+
+// LOGIN
+function loginUser(){
+ let u = username.value.trim();
+ let p = password.value.trim();
+
+ let users = getData("users");
+ let user = users.find(x=>x.u===u && x.p===p);
+
+ if(user){
+   currentUser = u;
+   login.classList.add("hidden");
+   main.classList.remove("hidden");
+   chat.classList.remove("hidden");
+   loadFolders();
+   loadChat();
+ } else alert("Wrong login");
+}
+
+// FOLDERS
+function loadFolders(){
+ foldersDiv = document.getElementById("folders");
+ foldersDiv.innerHTML = folders.map(f =>
+   `<div class="folder" onclick="openFolder('${f}')">📁 ${f}</div>`
+ ).join("");
+}
+
+// OPEN FOLDER
+function openFolder(name){
+ currentFolder = name;
+
+ document.getElementById("files").innerHTML = `
+ <h3>${name}</h3>
+ <input type="file" onchange="uploadFile(this.files[0])">
+ <input placeholder="Search" oninput="searchFiles(this.value)">
+ <div id="fileList"></div>`;
+
+ loadFiles();
+}
+
+// UPLOAD FILE
+function uploadFile(file){
+ if(!file) return;
+
+ let reader = new FileReader();
+ reader.onload = function(e){
+   let files = getData("files");
+   files.push({
+     folder: currentFolder,
+     name: file.name,
+     data: e.target.result
+   });
+   setData("files",files);
+   loadFiles();
+ };
+ reader.readAsDataURL(file);
+}
+
+// LOAD FILES
+function loadFiles(){
+ let files = getData("files").filter(f=>f.folder===currentFolder);
+
+ let html="";
+ files.forEach((f,i)=>{
+   html += `<div class="file"
+   onclick="previewFile(${i})"
+   ondblclick="openFile(${i})"
+   onmousedown="startPress(${i})"
+   onmouseup="cancelPress()">${f.name}</div>`;
+ });
+
+ document.getElementById("fileList").innerHTML = html;
+}
+
+// PREVIEW
+function previewFile(i){
+ let file = getData("files").filter(f=>f.folder===currentFolder)[i];
+ preview.innerHTML = `<iframe src="${file.data}" width="100%" height="300"></iframe>`;
+}
+
+// OPEN FILE
+function openFile(i){
+ let file = getData("files").filter(f=>f.folder===currentFolder)[i];
+ window.open(file.data);
+}
+
+// DELETE
+function startPress(i){
+ pressTimer = setTimeout(()=>{
+   if(confirm("Delete?")){
+     let files = getData("files");
+     files.splice(i,1);
+     setData("files",files);
+     loadFiles();
+   }
+ },800);
+}
+function cancelPress(){ clearTimeout(pressTimer); }
+
+// SEARCH
+function searchFiles(q){
+ document.querySelectorAll(".file").forEach(f=>{
+   f.style.display = f.innerText.toLowerCase().includes(q.toLowerCase()) ? "block":"none";
+ });
+}
+
+// CHAT
+function loadChat(){
+ let msgs = getData("chat");
+ let html="";
+ msgs.forEach(m=>{
+   let cls = m.user===currentUser ? "me":"other";
+   html += `<div class="msg ${cls}">${m.user}: ${m.text}</div>`;
+ });
+ chatMessages.innerHTML = html;
+}
+
+// SEND CHAT
+function sendMsg(){
+ let msg = chatText.value.trim();
+ if(!msg) return;
+
+ let msgs = getData("chat");
+ msgs.push({user:currentUser,text:msg});
+ setData("chat",msgs);
+
+ chatText.value="";
+ loadChat();
+}
+
+// SETTINGS
+function openSettings(){
+ settings.classList.toggle("hidden");
+ userInfo.innerText = "User: " + currentUser;
+}
+
+// LOGOUT
+function logout(){
+ location.reload();
+}
+</script>
+
+</body>
+</html>
